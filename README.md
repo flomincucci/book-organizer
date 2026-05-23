@@ -35,6 +35,16 @@ pip install -r requirements.txt
 
 ---
 
+
+## Environment variables
+
+| Variable | Used by | Description |
+|---|---|---|
+| `PORT` | both | Default port (overridden by `--port`) |
+| `GOOGLE_BOOKS_API_KEY` | both | Optional Google Books API key for higher lookup rate limits |
+
+---
+
 ## Running with SQLite
 
 No external accounts or configuration needed. A local `books.db` file is created automatically on first run.
@@ -151,10 +161,3 @@ book-organizer/
 ```
 
 ---
-
-## Environment variables
-
-| Variable | Used by | Description |
-|---|---|---|
-| `PORT` | both | Default port (overridden by `--port`) |
-| `GOOGLE_BOOKS_API_KEY` | both | Optional Google Books API key for higher lookup rate limits |
