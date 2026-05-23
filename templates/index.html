@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Book Scanner</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --accent: #2563eb;
+      --accent-dark: #1d4ed8;
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --muted: #64748b;
+      --danger: #dc2626;
+      --success: #16a34a;
+      --radius: 12px;
+      --nav-h: 64px;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 15px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ---- Layout ---- */
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 20px;
+      text-align: center;
+      font-weight: 700;
+      font-size: 17px;
+      letter-spacing: -0.3px;
+      flex-shrink: 0;
+    }
+
+    .pages {
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .page {
+      position: absolute;
+      inset: 0;
+      overflow-y: auto;
+      display: none;
+      padding-bottom: calc(var(--nav-h) + 16px);
+    }
+    .page.active { display: block; }
+
+    nav {
+      height: var(--nav-h);
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-shrink: 0;
+    }
+
+    .nav-btn {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 500;
+      transition: color 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .nav-btn.active { color: var(--accent); }
+    .nav-btn svg { width: 22px; height: 22px; }
+
+    /* ---- Scanner page ---- */
+    #scan-page {
+      display: flex;
+      flex-direction: column;
+    }
+
+    #reader-wrapper {
+      position: relative;
+      background: #000;
+      overflow: hidden;
+    }
+
+    #reader {
+      width: 100%;
+    }
+
+    /* Override html5-qrcode default UI */
+    #reader video { display: block; }
+    #reader__dashboard { display: none !important; }
+
+    .scan-hint {
+      text-align: center;
+      padding: 10px 20px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    /* ---- Book card (result) ---- */
+    #result-section {
+      padding: 16px;
+      display: none;
+    }
+
+    .book-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      display: flex;
+      gap: 14px;
+    }
+
+    .book-cover {
+      width: 72px;
+      min-width: 72px;
+      height: 104px;
+      border-radius: 6px;
+      object-fit: cover;
+      background: var(--border);
+    }
+
+    .book-cover-placeholder {
+      width: 72px;
+      min-width: 72px;
+      height: 104px;
+      border-radius: 6px;
+      background: var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+    }
+
+    .book-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .book-title {
+      font-weight: 700;
+      font-size: 15px;
+      line-height: 1.3;
+      margin-bottom: 4px;
+    }
+
+    .book-authors {
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 4px;
+    }
+
+    .book-meta {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .book-isbn {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 6px;
+      font-family: monospace;
+    }
+
+    .not-found-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      text-align: center;
+    }
+    .not-found-card p { color: var(--muted); font-size: 14px; margin-top: 6px; }
+    .not-found-card code { font-family: monospace; font-size: 14px; }
+
+    .manual-form {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 14px;
+      text-align: left;
+    }
+    .manual-form input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 14px;
+      color: var(--text);
+      background: var(--bg);
+      outline: none;
+    }
+    .manual-form input:focus { border-color: var(--accent); }
+
+    .saved-badge {
+      display: inline-block;
+      background: #dcfce7;
+      color: var(--success);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 10px;
+      margin-top: 6px;
+    }
+
+    .result-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 11px 16px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      -webkit-tap-highlight-color: transparent;
+      transition: opacity 0.15s;
+    }
+    .btn:active { opacity: 0.75; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-secondary { background: var(--border); color: var(--text); }
+    .btn-danger { background: #fee2e2; color: var(--danger); }
+
+    /* ---- Toast ---- */
+    #toast {
+      position: fixed;
+      bottom: calc(var(--nav-h) + 16px);
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: #1e293b;
+      color: #fff;
+      padding: 10px 18px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 500;
+      opacity: 0;
+      transition: opacity 0.2s, transform 0.2s;
+      pointer-events: none;
+      white-space: nowrap;
+      z-index: 100;
+    }
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* ---- Spinner ---- */
+    .spinner {
+      width: 20px; height: 20px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      display: inline-block;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #lookup-status {
+      text-align: center;
+      padding: 20px;
+      display: none;
+      gap: 10px;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ---- Library page ---- */
+    #library-page {
+      padding: 16px;
+    }
+
+    .library-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+
+    .library-count {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .book-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .library-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .library-card .book-cover,
+    .library-card .book-cover-placeholder {
+      width: 52px;
+      min-width: 52px;
+      height: 76px;
+    }
+
+    .library-card .book-title { font-size: 14px; }
+
+    .delete-btn {
+      margin-left: auto;
+      padding: 6px;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      color: var(--muted);
+      border-radius: 6px;
+      -webkit-tap-highlight-color: transparent;
+      flex-shrink: 0;
+    }
+    .delete-btn:active { background: #fee2e2; color: var(--danger); }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--muted);
+    }
+    .empty-state svg { margin-bottom: 12px; opacity: 0.3; }
+    .empty-state p { font-size: 15px; }
+
+    #camera-error {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: var(--radius);
+      padding: 16px;
+      margin: 16px;
+      font-size: 14px;
+      color: var(--danger);
+      display: none;
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+  <header>📚 Book Scanner</header>
+
+  <div class="pages">
+    <!-- SCAN PAGE -->
+    <div id="scan-page" class="page active">
+      <div id="reader-wrapper">
+        <div id="reader"></div>
+      </div>
+      <div id="camera-error"></div>
+      <p class="scan-hint">Apuntá la cámara al código de barras del libro</p>
+
+      <div id="lookup-status">
+        <span class="spinner"></span>
+        <span>Buscando libro...</span>
+      </div>
+
+      <div id="result-section"></div>
+    </div>
+
+    <!-- LIBRARY PAGE -->
+    <div id="library-page" class="page">
+      <div class="library-header">
+        <h2 style="font-size:17px;font-weight:700;">Mi biblioteca</h2>
+        <span class="library-count" id="library-count"></span>
+      </div>
+      <div class="book-list" id="book-list"></div>
+    </div>
+  </div>
+
+  <nav>
+    <button class="nav-btn active" id="nav-scan" onclick="showPage('scan')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2"/>
+        <line x1="3" y1="12" x2="21" y2="12"/>
+      </svg>
+      Escanear
+    </button>
+    <button class="nav-btn" id="nav-library" onclick="showPage('library')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
+        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
+      </svg>
+      Biblioteca
+    </button>
+  </nav>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  // -----------------------------------------------------------------------
+  // State
+  // -----------------------------------------------------------------------
+  let scanner = null;
+  let scanning = false;
+  let lastScanned = null;
+  let scanCooldown = false;
+
+  // -----------------------------------------------------------------------
+  // Navigation
+  // -----------------------------------------------------------------------
+  function showPage(name) {
+    document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+    document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
+    document.getElementById(`${name}-page`).classList.add("active");
+    document.getElementById(`nav-${name}`).classList.add("active");
+
+    if (name === "scan") {
+      startScanner();
+    } else {
+      stopScanner();
+      loadLibrary();
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // Scanner
+  // -----------------------------------------------------------------------
+  function startScanner() {
+    if (scanning) return;
+
+    const readerEl = document.getElementById("reader");
+    // Clear previous instance if any
+    readerEl.innerHTML = "";
+
+    scanner = new Html5Qrcode("reader");
+
+    const config = {
+      fps: 10,
+      qrbox: { width: Math.min(280, window.innerWidth - 60), height: 100 },
+      formatsToSupport: [
+        Html5QrcodeSupportedFormats.EAN_13,
+        Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.UPC_A,
+        Html5QrcodeSupportedFormats.UPC_E,
+        Html5QrcodeSupportedFormats.CODE_128,
+      ],
+    };
+
+    scanner.start(
+      { facingMode: "environment" },
+      config,
+      onScanSuccess,
+      () => {} // ignore per-frame errors
+    ).then(() => {
+      scanning = true;
+      document.getElementById("camera-error").style.display = "none";
+    }).catch(err => {
+      const errEl = document.getElementById("camera-error");
+      errEl.style.display = "block";
+      errEl.textContent = "No se pudo acceder a la cámara. Verificá los permisos del navegador.";
+      console.error("Camera error:", err);
+    });
+  }
+
+  function stopScanner() {
+    if (scanner && scanning) {
+      scanner.stop().catch(() => {});
+      scanning = false;
+    }
+  }
+
+  async function onScanSuccess(isbn) {
+    if (scanCooldown || isbn === lastScanned) return;
+    scanCooldown = true;
+    lastScanned = isbn;
+
+    stopScanner();
+    showLookupStatus(true);
+    clearResult();
+
+    try {
+      const resp = await fetch(`/api/lookup/${encodeURIComponent(isbn)}`);
+      const book = await resp.json();
+      showResult(book);
+    } catch (e) {
+      showResult({ found: false, isbn });
+    } finally {
+      showLookupStatus(false);
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // Result UI
+  // -----------------------------------------------------------------------
+  function showLookupStatus(visible) {
+    const el = document.getElementById("lookup-status");
+    el.style.display = visible ? "flex" : "none";
+  }
+
+  function clearResult() {
+    const el = document.getElementById("result-section");
+    el.style.display = "none";
+    el.innerHTML = "";
+  }
+
+  function coverImg(url, cls) {
+    if (url) return `<img class="${cls}" src="${url}" alt="portada" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+      <div class="${cls.replace('book-cover','book-cover-placeholder')}" style="display:none">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+      </div>`;
+    return `<div class="${cls.replace('book-cover','book-cover-placeholder')}">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+    </div>`;
+  }
+
+  function showResult(book) {
+    const el = document.getElementById("result-section");
+    el.style.display = "block";
+
+    if (!book.found) {
+      if (book.already_saved) {
+        el.innerHTML = `
+          <div class="not-found-card">
+            <strong>ISBN ya guardado</strong>
+            <p><code>${escHtml(book.isbn)}</code></p>
+            <span class="saved-badge">Ya en tu biblioteca</span>
+            <div class="result-actions" style="margin-top:14px">
+              <button class="btn btn-secondary" onclick="resetScan()">Escanear de nuevo</button>
+            </div>
+          </div>`;
+      } else {
+        el.innerHTML = `
+          <div class="not-found-card">
+            <strong>Libro no encontrado</strong>
+            <p>No se encontró información para <code>${escHtml(book.isbn)}</code>. Podés ingresarlo manualmente.</p>
+            <div class="manual-form">
+              <input type="text" id="m-title" placeholder="Título *" />
+              <input type="text" id="m-authors" placeholder="Autor(es)" />
+              <input type="text" id="m-publisher" placeholder="Editorial" />
+              <input type="text" id="m-year" placeholder="Año" inputmode="numeric" maxlength="4" />
+            </div>
+            <div class="result-actions">
+              <button class="btn btn-secondary" onclick="resetScan()">Cancelar</button>
+              <button class="btn btn-primary" onclick="saveManual('${escHtml(book.isbn)}')">Guardar</button>
+            </div>
+          </div>`;
+      }
+      return;
+    }
+
+    const meta = [book.publisher, book.year].filter(Boolean).join(" · ");
+    const savedBadge = book.already_saved ? `<span class="saved-badge">Ya en tu biblioteca</span>` : "";
+    const actions = book.already_saved
+      ? `<button class="btn btn-secondary" onclick="resetScan()">Escanear de nuevo</button>`
+      : `<button class="btn btn-secondary" onclick="resetScan()">Cancelar</button>
+         <button class="btn btn-primary" id="save-btn" onclick="saveBook(${JSON.stringify(book).split('"').join('&quot;')})">Guardar</button>`;
+
+    el.innerHTML = `
+      <div class="book-card">
+        ${coverImg(book.cover_url, "book-cover")}
+        <div class="book-info">
+          <div class="book-title">${escHtml(book.title || "Sin título")}</div>
+          <div class="book-authors">${escHtml(book.authors || "Autor desconocido")}</div>
+          ${meta ? `<div class="book-meta">${escHtml(meta)}</div>` : ""}
+          <div class="book-isbn">${book.isbn}</div>
+          ${savedBadge}
+        </div>
+      </div>
+      <div class="result-actions">
+        ${actions}
+      </div>`;
+  }
+
+  async function saveBook(book) {
+    const btn = document.getElementById("save-btn");
+    if (btn) { btn.disabled = true; btn.textContent = "Guardando…"; }
+
+    const resp = await fetch("/api/books", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(book),
+    });
+    const data = await resp.json();
+
+    if (data.success) {
+      showToast("✓ Libro guardado");
+      resetScan();
+    } else if (data.error === "duplicate") {
+      showToast("Ya está en tu biblioteca");
+      resetScan();
+    } else {
+      showToast("Error al guardar");
+      if (btn) { btn.disabled = false; btn.textContent = "Guardar"; }
+    }
+  }
+
+  function saveManual(isbn) {
+    const title = document.getElementById("m-title").value.trim();
+    if (!title) { showToast("Ingresá un título"); return; }
+    saveBook({
+      isbn,
+      title,
+      authors: document.getElementById("m-authors").value.trim(),
+      publisher: document.getElementById("m-publisher").value.trim(),
+      year: document.getElementById("m-year").value.trim(),
+      cover_url: "",
+    });
+  }
+
+  function resetScan() {
+    clearResult();
+    lastScanned = null;
+    scanCooldown = false;
+    startScanner();
+  }
+
+  // -----------------------------------------------------------------------
+  // Library
+  // -----------------------------------------------------------------------
+  async function loadLibrary() {
+    const listEl = document.getElementById("book-list");
+    const countEl = document.getElementById("library-count");
+    listEl.innerHTML = `<div style="text-align:center;padding:40px"><span class="spinner"></span></div>`;
+
+    const resp = await fetch("/api/books");
+    const books = await resp.json();
+
+    countEl.textContent = `${books.length} libro${books.length !== 1 ? "s" : ""}`;
+
+    if (!books.length) {
+      listEl.innerHTML = `
+        <div class="empty-state">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
+          </svg>
+          <p>Todavía no escaneaste ningún libro</p>
+        </div>`;
+      return;
+    }
+
+    listEl.innerHTML = books.map(b => `
+      <div class="library-card">
+        ${coverImg(b.cover_url, "book-cover")}
+        <div class="book-info">
+          <div class="book-title">${escHtml(b.title || "Sin título")}</div>
+          <div class="book-authors">${escHtml(b.authors || "")}</div>
+          ${b.year ? `<div class="book-meta">${escHtml(b.year)}</div>` : ""}
+          <div class="book-isbn">${b.isbn}</div>
+        </div>
+        <button class="delete-btn" onclick="deleteBook(${b.id}, this)" aria-label="Eliminar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+            <path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
+          </svg>
+        </button>
+      </div>`).join("");
+  }
+
+  async function deleteBook(id, btn) {
+    btn.disabled = true;
+    await fetch(`/api/books/${id}`, { method: "DELETE" });
+    showToast("Libro eliminado");
+    loadLibrary();
+  }
+
+  // -----------------------------------------------------------------------
+  // Utilities
+  // -----------------------------------------------------------------------
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  let toastTimer;
+  function showToast(msg) {
+    const el = document.getElementById("toast");
+    el.textContent = msg;
+    el.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove("show"), 2500);
+  }
+
+  // -----------------------------------------------------------------------
+  // Init
+  // -----------------------------------------------------------------------
+  startScanner();
+</script>
+</body>
+</html>
