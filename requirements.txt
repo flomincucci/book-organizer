@@ -2,3 +2,5 @@ fastapi
 uvicorn[standard]
 requests
 cryptography
+google-auth
+google-api-python-client
