@@ -27,7 +27,7 @@ templates = Jinja2Templates(directory=os.path.join(os.path.dirname(os.path.abspa
 SHEETS_SERVICE = None
 SPREADSHEET_ID = None
 SHEET_TAB_ID = None          # integer tab ID needed for batchUpdate (≠ spreadsheet ID string)
-SHEET_NAME = "Sheet1"
+SHEET_NAME = "Libros"
 HEADER = ["id", "isbn", "title", "authors", "publisher", "year", "cover_url", "added_at"]
 
 
@@ -121,7 +121,7 @@ def get_books() -> list:
     return books
 
 
-def find_by_isbn(isbn: str) -> dict | None:
+def find_by_isbn(isbn: str) -> Optional[dict]:
     """Return the book dict for the given ISBN, or None if not found."""
     rows = get_all_rows()
     if len(rows) <= 1:
