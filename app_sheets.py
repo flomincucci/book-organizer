@@ -25,6 +25,7 @@ templates = Jinja2Templates(directory=os.path.join(os.path.dirname(os.path.abspa
 # ---------------------------------------------------------------------------
 
 SHEETS_SERVICE = None
+BOOKS_SERVICE = None
 SPREADSHEET_ID = None
 SHEET_TAB_ID = None          # integer tab ID needed for batchUpdate (≠ spreadsheet ID string)
 SHEET_NAME = "Libros"
@@ -36,16 +37,20 @@ HEADER = ["id", "isbn", "title", "authors", "publisher", "year", "cover_url", "a
 # ---------------------------------------------------------------------------
 
 def init_sheets_client(credentials_path: str):
-    global SHEETS_SERVICE
-    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+    global SHEETS_SERVICE, BOOKS_SERVICE
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/books",
+    ]
     try:
         creds = Credentials.from_service_account_file(credentials_path, scopes=scopes)
         SHEETS_SERVICE = build("sheets", "v4", credentials=creds)
+        BOOKS_SERVICE = build("books", "v1", credentials=creds)
     except FileNotFoundError:
         print(f"ERROR: Credentials file not found: {credentials_path}")
         sys.exit(1)
     except Exception as e:
-        print(f"ERROR: Failed to authenticate with Google Sheets: {e}")
+        print(f"ERROR: Failed to authenticate with Google: {e}")
         sys.exit(1)
 
 
@@ -219,12 +224,15 @@ def lookup_open_library(isbn):
 
 
 def lookup_google_books(isbn):
-    api_key = os.environ.get("GOOGLE_BOOKS_API_KEY", "")
-    url = f"https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn}"
-    if api_key:
-        url += f"&key={api_key}"
-    resp = requests.get(url, timeout=6)
-    data = resp.json()
+    if BOOKS_SERVICE:
+        data = BOOKS_SERVICE.volumes().list(q=f"isbn:{isbn}").execute()
+    else:
+        api_key = os.environ.get("GOOGLE_BOOKS_API_KEY", "")
+        url = f"https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn}"
+        if api_key:
+            url += f"&key={api_key}"
+        resp = requests.get(url, timeout=6)
+        data = resp.json()
     if not data.get("items"):
         return None
     info = data["items"][0]["volumeInfo"]

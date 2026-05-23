@@ -12,9 +12,34 @@ import ipaddress
 import argparse
 import uvicorn
 
+try:
+    from google.oauth2.service_account import Credentials
+    from googleapiclient.discovery import build as google_build
+    _GOOGLE_LIBS_AVAILABLE = True
+except ImportError:
+    _GOOGLE_LIBS_AVAILABLE = False
+
 app = FastAPI()
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates"))
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "books.db")
+
+BOOKS_SERVICE = None
+
+
+def init_books_client(credentials_path: str):
+    global BOOKS_SERVICE
+    if not _GOOGLE_LIBS_AVAILABLE:
+        print("  Warning: google-api-python-client not installed; Books API will use API key / unauthenticated.")
+        return
+    try:
+        creds = Credentials.from_service_account_file(
+            credentials_path,
+            scopes=["https://www.googleapis.com/auth/books"],
+        )
+        BOOKS_SERVICE = google_build("books", "v1", credentials=creds)
+        print(f"  Google Books API: authenticated via {credentials_path}")
+    except Exception as e:
+        print(f"  Warning: Could not init Google Books client from {credentials_path}: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -73,12 +98,15 @@ def lookup_open_library(isbn):
 
 
 def lookup_google_books(isbn):
-    api_key = os.environ.get("GOOGLE_BOOKS_API_KEY", "")
-    url = f"https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn}"
-    if api_key:
-        url += f"&key={api_key}"
-    resp = requests.get(url, timeout=6)
-    data = resp.json()
+    if BOOKS_SERVICE:
+        data = BOOKS_SERVICE.volumes().list(q=f"isbn:{isbn}").execute()
+    else:
+        api_key = os.environ.get("GOOGLE_BOOKS_API_KEY", "")
+        url = f"https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn}"
+        if api_key:
+            url += f"&key={api_key}"
+        resp = requests.get(url, timeout=6)
+        data = resp.json()
     if not data.get("items"):
         return None
     info = data["items"][0]["volumeInfo"]
@@ -235,8 +263,17 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Book Scanner")
     parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", 5000)), help="Puerto (default: 5000)")
     parser.add_argument("--no-ssl", action="store_true", help="Run without SSL (HTTP only)")
+    parser.add_argument("--credentials", default="credentials.json",
+                        help="Path to Google service account JSON (default: credentials.json). "
+                             "Used for authenticated Books API calls when the file exists.")
     args = parser.parse_args()
     port = args.port
+
+    # Resolve credentials path relative to script directory if not absolute
+    creds_path = args.credentials if os.path.isabs(args.credentials) else \
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), args.credentials)
+    if os.path.exists(creds_path):
+        init_books_client(creds_path)
 
     init_db()
     local_ip = get_local_ip()
